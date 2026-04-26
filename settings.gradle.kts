@@ -4,7 +4,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = "mts-entry-test"
+rootProject.name = "mtsEntryTest"
 
 include("lib", "app")
 

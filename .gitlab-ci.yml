@@ -1,0 +1,10 @@
+stages:
+  - a
+  - b
+
+job_name1:
+  image: ubuntu
+
+job_name2:
+  image:
+    name: ubuntu
