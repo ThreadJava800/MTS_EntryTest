@@ -1,5 +1,7 @@
 package yamlparser.yaml
 
+import java.util.LinkedList
+
 import yamlparser.yaml.YamlParserResult
 
 sealed interface YamlToken {
@@ -11,93 +13,98 @@ sealed interface YamlToken {
     data object BulletPointToken : YamlToken
 }
 
-class YamlLexer {
-    private fun isTab(text: String, pos: Int): Boolean {
+class YamlLexer(private val text: String) {
+    private var currPos = 0
+    private var lineNumber = 1
+
+    private fun isTab(pos: Int): Boolean {
         return text[pos] == '\t'
     }
 
-    // returns error if there are tabs in the text
-    // on success, returns the number of leading spaces
-    private fun extractIndent(text: String, currPos: Int, lineNumber: Int): YamlParserResult<Pair<YamlToken, Int>> {
+    private fun extractIndent(): YamlParserResult<YamlToken?> {
         var spaces = 0
         while (currPos + spaces < text.length && text[currPos + spaces] == ' ') {
             spaces++
         }
-        if (currPos + spaces < text.length && isTab(text, currPos + spaces)) {
+        if (currPos + spaces < text.length && isTab(currPos + spaces)) {
             return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
         }
-        return YamlParserResult.Success(YamlToken.IndentToken(spaces) to spaces)
+
+        if (spaces > 0) {
+            currPos += spaces
+            return YamlParserResult.Success(YamlToken.IndentToken(spaces))
+        }
+        return YamlParserResult.Success(null)
     }
 
-    private fun extractSingleCharToken(text: String, currPos: Int, lineNumber: Int): YamlParserResult<Pair<YamlToken, Int>> {
-        if (isTab(text, currPos)) {
+    private fun extractSingleCharToken(): YamlParserResult<YamlToken?> {
+        if (isTab(currPos)) {
             return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
         }
         if (text[currPos] == '\n') {
-            return YamlParserResult.Success(YamlToken.NewLineToken to 1)
+            lineNumber++
+            currPos++
+            return YamlParserResult.Success(YamlToken.NewLineToken)
         }
         if (text[currPos] == ':') {
-            return YamlParserResult.Success(YamlToken.ColonToken to 1)
+            currPos++
+            return YamlParserResult.Success(YamlToken.ColonToken)
         }
         if (text[currPos] == '-') {
-            return YamlParserResult.Success(YamlToken.BulletPointToken to 1)
+            currPos++
+            return YamlParserResult.Success(YamlToken.BulletPointToken)
         }
-        return YamlParserResult.Success(YamlToken.ColonToken to 0)
+
+        return YamlParserResult.Success(null)
     }
 
-    private fun extractWordToken(text: String, currPos: Int, lineNumber: Int): YamlParserResult<Pair<YamlToken, Int>> {
-        var tokenLength = 0
-        while (currPos + tokenLength < text.length) {
-            if (isTab(text, currPos + tokenLength)) {
+    private fun extractWordToken(): YamlParserResult<YamlToken?> {
+        var wordLength = 0
+        while (currPos + wordLength < text.length) {
+            if (isTab(currPos + wordLength)) {
                 return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
             }
-            if (!text[currPos + tokenLength].isLetterOrDigit() && text[currPos + tokenLength] != '_') {
+            if (!text[currPos + wordLength].isLetterOrDigit() && text[currPos + wordLength] != '_') {
                 break
             }
-            tokenLength++
+            wordLength++
         }
-        return YamlParserResult.Success(
-            YamlToken.WordToken(text.subSequence(currPos, currPos + tokenLength)) to tokenLength
-        )
+
+        if (wordLength > 0) {
+            currPos += wordLength
+            return YamlParserResult.Success(YamlToken.WordToken(text.subSequence(currPos - wordLength, currPos)))
+        }
+        return YamlParserResult.Success(null)
     }
 
-    fun getTokens(text: String): YamlParserResult<List<YamlToken>> {
-        val tokens = mutableListOf<YamlToken>()
-
-        var currPos = 0
-        var lineNumber = 1
+    fun getTokens(): YamlParserResult<LinkedList<YamlToken>> {
+        val tokens = LinkedList<YamlToken>()
 
         while (currPos < text.length) {
-            val (indentToken, indentTokenLength) = when (val res = extractIndent(text, currPos, lineNumber)) {
+            val indentToken = when (val res = extractIndent()) {
                 is YamlParserResult.Success -> res.value
                 is YamlParserResult.Failure -> return res
             }
-            if (indentTokenLength > 0) {
+            if (indentToken != null) {
                 tokens.add(indentToken)
-                currPos += indentTokenLength
                 continue
             }
-    
-            val (singleCharToken, singleCharTokenLength) = when (val res = extractSingleCharToken(text, currPos, lineNumber)) {
+
+            val singleCharToken = when (val res = extractSingleCharToken()) {
                 is YamlParserResult.Success -> res.value
                 is YamlParserResult.Failure -> return res
             }
-            if (singleCharTokenLength > 0) {
-                if (singleCharToken is YamlToken.NewLineToken) {
-                    lineNumber++
-                }
+            if (singleCharToken != null) {
                 tokens.add(singleCharToken)
-                currPos += singleCharTokenLength
                 continue
             }
-    
-            val (wordToken, wordTokenLength) = when (val res = extractWordToken(text, currPos, lineNumber)) {
+
+            val wordToken = when (val res = extractWordToken()) {
                 is YamlParserResult.Success -> res.value
                 is YamlParserResult.Failure -> return res
             }
-            if (wordTokenLength > 0) {
+            if (wordToken != null) {
                 tokens.add(wordToken)
-                currPos += wordTokenLength
                 continue
             }
 

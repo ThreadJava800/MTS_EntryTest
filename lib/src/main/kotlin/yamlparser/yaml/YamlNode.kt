@@ -1,5 +1,7 @@
 package yamlparser.yaml
 
+import org.slf4j.LoggerFactory
+
 data class SourcePos(
     val line: Int,
     val column: Int,
@@ -24,3 +26,25 @@ sealed interface YamlNode {
     ) : YamlNode
 }
 
+private val logger = LoggerFactory.getLogger("yamlparser.yaml.YamlNode")
+
+fun YamlNode.traceTree(indent: String = "") {
+    when (this) {
+        is YamlNode.Scalar ->
+            logger.trace("{}{}", indent, "Scalar \"$value\" @ $pos")
+        is YamlNode.Mapping -> {
+            logger.trace("{}{}", indent, "Mapping @ $pos")
+            for ((key, child) in entries) {
+                logger.trace("{}{}", indent, "  $key:")
+                child.traceTree("$indent    ")
+            }
+        }
+        is YamlNode.Sequence -> {
+            logger.trace("{}{}", indent, "Sequence @ $pos")
+            items.forEachIndexed { index, child ->
+                logger.trace("{}{}", indent, "  [$index]")
+                child.traceTree("$indent    ")
+            }
+        }
+    }
+}
