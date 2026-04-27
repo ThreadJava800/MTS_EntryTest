@@ -33,7 +33,7 @@ fun parseGitlabCi(filePath: String): YamlParserResult<GitlabCiConfig> {
         logger.trace("YAML tokens:")
         val tokenIterator = tokens.iterator()
         while (tokenIterator.hasNext()) {
-            logger.trace("{}", tokenIterator.next())
+            logger.trace("\t{}", tokenIterator.next())
         }
     }
 
@@ -45,7 +45,7 @@ fun parseGitlabCi(filePath: String): YamlParserResult<GitlabCiConfig> {
 
     if (logger.isTraceEnabled) {
         logger.trace("YAML AST:")
-        rootNode.traceTree()
+        rootNode.traceTree("    ")
     }
 
     return GitlabCiMapper().map(rootNode)

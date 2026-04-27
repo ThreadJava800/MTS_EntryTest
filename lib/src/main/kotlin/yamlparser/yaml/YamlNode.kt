@@ -2,47 +2,37 @@ package yamlparser.yaml
 
 import org.slf4j.LoggerFactory
 
-data class SourcePos(
-    val line: Int,
-    val column: Int,
-)
-
 sealed interface YamlNode {
-    val pos: SourcePos
-
-    data class Scalar(
+    data class Word(
         val value: String,
-        override val pos: SourcePos,
     ) : YamlNode
 
-    data class Mapping(
+    data class Block(
         val entries: Map<String, YamlNode>,
-        override val pos: SourcePos,
     ) : YamlNode
 
-    data class Sequence(
-        val items: List<YamlNode>,
-        override val pos: SourcePos,
+    data class List(
+        val items: kotlin.collections.List<YamlNode>,
     ) : YamlNode
 }
 
-private val logger = LoggerFactory.getLogger("yamlparser.yaml.YamlNode")
+private val logger = LoggerFactory.getLogger("yamlparser.yaml.YamlTree")
 
 fun YamlNode.traceTree(indent: String = "") {
     when (this) {
-        is YamlNode.Scalar ->
-            logger.trace("{}{}", indent, "Scalar \"$value\" @ $pos")
-        is YamlNode.Mapping -> {
-            logger.trace("{}{}", indent, "Mapping @ $pos")
+        is YamlNode.Word ->
+            logger.trace("$indent@Word \"$value\"")
+        is YamlNode.Block -> {
+            logger.trace("$indent@Block")
             for ((key, child) in entries) {
-                logger.trace("{}{}", indent, "  $key:")
+                logger.trace("$indent@$key:")
                 child.traceTree("$indent    ")
             }
         }
-        is YamlNode.Sequence -> {
-            logger.trace("{}{}", indent, "Sequence @ $pos")
+        is YamlNode.List -> {
+            logger.trace("$indent@List")
             items.forEachIndexed { index, child ->
-                logger.trace("{}{}", indent, "  [$index]")
+                logger.trace("$indent@[$index]")
                 child.traceTree("$indent    ")
             }
         }
