@@ -3,8 +3,8 @@ stages:
 
   - b
 
-
-
+  
+  
   - c
 
 job_name1:
@@ -13,6 +13,7 @@ job_name1:
 job_name2:
   image:
     name:
+    
       name2:
         name3:
           - item1

@@ -1,6 +1,7 @@
 package yamlparser.yaml
 
 import java.util.LinkedList
+import org.slf4j.LoggerFactory
 
 import yamlparser.yaml.YamlParserResult
 
@@ -12,6 +13,8 @@ sealed interface YamlToken {
     data object ColonToken : YamlToken
     data object BulletPointToken : YamlToken
 }
+
+private val logger = LoggerFactory.getLogger("yamlparser.yaml.YamlLexer")
 
 class YamlLexer(private val text: String) {
     private var currPos = 0
@@ -32,6 +35,13 @@ class YamlLexer(private val text: String) {
 
         if (spaces > 0) {
             currPos += spaces
+
+            val next = text.getOrNull(currPos)
+            if (next == null || next == '\n' || next == '\r') {
+                logger.trace("Found end of line after $spaces spaces at line $lineNumber. Omit line")
+                return YamlParserResult.Success(null)
+            }
+
             return YamlParserResult.Success(YamlToken.IndentToken(spaces))
         }
         return YamlParserResult.Success(null)
@@ -40,6 +50,14 @@ class YamlLexer(private val text: String) {
     private fun extractSingleCharToken(): YamlParserResult<YamlToken?> {
         if (isTab(currPos)) {
             return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
+        }
+        if (text[currPos] == '\r') {
+            currPos++
+            if (currPos < text.length && text[currPos] == '\n') {
+                currPos++
+            }
+            lineNumber++
+            return YamlParserResult.Success(YamlToken.NewLineToken)
         }
         if (text[currPos] == '\n') {
             lineNumber++
