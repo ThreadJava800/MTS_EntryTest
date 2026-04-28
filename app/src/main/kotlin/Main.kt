@@ -15,7 +15,8 @@ fun main(args: Array<String>) {
 
     val result = parseGitlabCi(args[0])
     when (result) {
-        is YamlParserResult.Success -> println("Successfully parsed GitLab YAML")
+        is YamlParserResult.Success ->
+            println("Successfully parsed GitLab YAML: ${result.value}")
         is YamlParserResult.Failure -> {
             println("Failed to parse GitLab YAML with error: ${result.errorMessage}")
             return

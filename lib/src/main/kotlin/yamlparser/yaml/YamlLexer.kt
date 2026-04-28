@@ -1,20 +1,15 @@
 package yamlparser.yaml
 
 import java.util.LinkedList
-import org.slf4j.LoggerFactory
-
-import yamlparser.yaml.YamlParserResult
 
 sealed interface YamlToken {
     data class WordToken(val content: CharSequence) : YamlToken
     data class IndentToken(val cnt: Int) : YamlToken
+    data class NewLineToken(val cnt: Int) : YamlToken
 
-    data object NewLineToken : YamlToken
     data object ColonToken : YamlToken
     data object BulletPointToken : YamlToken
 }
-
-private val logger = LoggerFactory.getLogger("yamlparser.yaml.YamlLexer")
 
 class YamlLexer(private val text: String) {
     private var currPos = 0
@@ -35,34 +30,80 @@ class YamlLexer(private val text: String) {
 
         if (spaces > 0) {
             currPos += spaces
-
-            val next = text.getOrNull(currPos)
-            if (next == null || next == '\n' || next == '\r') {
-                logger.trace("Found end of line after $spaces spaces at line $lineNumber. Omit line")
+            if (currPos >= text.length) {
                 return YamlParserResult.Success(null)
             }
-
             return YamlParserResult.Success(YamlToken.IndentToken(spaces))
         }
         return YamlParserResult.Success(null)
     }
 
-    private fun extractSingleCharToken(): YamlParserResult<YamlToken?> {
+    private fun skipComment(): YamlParserResult<Unit> {
+        if (currPos >= text.length) return YamlParserResult.Success(Unit)
         if (isTab(currPos)) {
             return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
         }
-        if (text[currPos] == '\r') {
+        if (text[currPos] != '#') return YamlParserResult.Success(Unit)
+
+        currPos++
+        while (currPos < text.length) {
+            val ch = text[currPos]
+            if (ch == '\n' || ch == '\r') break
+            if (isTab(currPos)) {
+                return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
+            }
             currPos++
-            if (currPos < text.length && text[currPos] == '\n') {
+        }
+        return YamlParserResult.Success(Unit)
+    }
+
+    private fun normalizeTokens(tokens: LinkedList<YamlToken>): LinkedList<YamlToken> {
+        val input = LinkedList(tokens)
+        val out = LinkedList<YamlToken>()
+
+        var pendingNewLines = 0
+        while (input.isNotEmpty()) {
+            val tok = input.removeFirst()
+
+            if (tok is YamlToken.IndentToken) {
+                if (input.firstOrNull() is YamlToken.NewLineToken) continue
+            }
+
+            if (tok is YamlToken.NewLineToken) {
+                pendingNewLines += tok.cnt
+                continue
+            }
+
+            if (pendingNewLines > 0) {
+                out.add(YamlToken.NewLineToken(pendingNewLines))
+                pendingNewLines = 0
+            }
+            out.add(tok)
+        }
+
+        if (pendingNewLines > 0) {
+            out.add(YamlToken.NewLineToken(pendingNewLines))
+        }
+
+        return out
+    }
+
+    private fun extractSingleCharToken(): YamlParserResult<YamlToken?> {
+        if (currPos >= text.length) return YamlParserResult.Success(null)
+        if (isTab(currPos)) {
+            return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
+        }
+        if (text[currPos] == '\r' || text[currPos] == '\n') {
+            if (text[currPos] == '\r') {
+                currPos++
+                if (currPos < text.length && text[currPos] == '\n') {
+                    currPos++
+                }
+            } else {
                 currPos++
             }
             lineNumber++
-            return YamlParserResult.Success(YamlToken.NewLineToken)
-        }
-        if (text[currPos] == '\n') {
-            lineNumber++
-            currPos++
-            return YamlParserResult.Success(YamlToken.NewLineToken)
+            return YamlParserResult.Success(YamlToken.NewLineToken(1))
         }
         if (text[currPos] == ':') {
             currPos++
@@ -99,6 +140,11 @@ class YamlLexer(private val text: String) {
         val tokens = LinkedList<YamlToken>()
 
         while (currPos < text.length) {
+            when (val res = skipComment()) {
+                is YamlParserResult.Success -> Unit
+                is YamlParserResult.Failure -> return res
+            }
+
             val indentToken = when (val res = extractIndent()) {
                 is YamlParserResult.Success -> res.value
                 is YamlParserResult.Failure -> return res
@@ -129,6 +175,6 @@ class YamlLexer(private val text: String) {
             return YamlParserResult.Failure("Invalid token at line $lineNumber")
         }
 
-        return YamlParserResult.Success(tokens)
+        return YamlParserResult.Success(normalizeTokens(tokens))
     }
 }

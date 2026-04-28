@@ -8,6 +8,47 @@ private val logger = LoggerFactory.getLogger("yamlparser.yaml.YamlParser")
 class YamlParser(private var tokens: LinkedList<YamlToken>) {
     var line: Int = 1
 
+    private fun parseMappingAtIndent(indent: Int, firstIndentAlreadyRead: Boolean): YamlParserResult<YamlNode.Block> {
+        val entries = linkedMapOf<String, YamlNode>()
+
+        var first = true
+        while (tokens.isNotEmpty()) {
+            if (!first) {
+                readNewLines()
+                if (tokens.isEmpty()) break
+
+                val nextIndent = peekIndents()
+                if (nextIndent != indent) break
+                readIndents()
+            } else {
+                if (!firstIndentAlreadyRead) {
+                    val got = readIndents()
+                    if (got != indent) {
+                        return YamlParserResult.Failure("Expected indent=$indent, got $got at line $line")
+                    }
+                }
+            }
+
+            val key = when (val res = readWordOrFail()) {
+                is YamlParserResult.Success -> res.value
+                is YamlParserResult.Failure -> return res
+            }
+            when (val res = readColonOrFail()) {
+                is YamlParserResult.Success -> Unit
+                is YamlParserResult.Failure -> return res
+            }
+            val value = when (val res = parseValueAfterColon(indent)) {
+                is YamlParserResult.Success -> res.value
+                is YamlParserResult.Failure -> return res
+            }
+            entries[key] = value
+
+            first = false
+        }
+
+        return YamlParserResult.Success(YamlNode.Block(entries))
+    }
+
     private fun peekIndents(): Int {
         var sum = 0
         for (t in tokens) {
@@ -18,22 +59,22 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
     }
 
     private fun readIndents(): Int {
-        var indent = 0
-        while (tokens.isNotEmpty() && tokens.first() is YamlToken.IndentToken) {
-            indent += (tokens.first() as YamlToken.IndentToken).cnt
-            tokens.removeFirst()
+        if (tokens.isEmpty() || tokens.first() !is YamlToken.IndentToken) {
+            return 0
         }
+        val indent = (tokens.first() as YamlToken.IndentToken).cnt
+        tokens.removeFirst()
 
         logger.trace("Read $indent indents at line $line")
         return indent
     }
 
     private fun readNewLines(): Int {
-        var cnt = 0
-        while (tokens.isNotEmpty() && tokens.first() is YamlToken.NewLineToken) {
-            cnt++
-            tokens.removeFirst()
+        if (tokens.isEmpty() || tokens.first() !is YamlToken.NewLineToken) {
+            return 0
         }
+        val cnt = (tokens.first() as YamlToken.NewLineToken).cnt
+        tokens.removeFirst()
 
         line += cnt
         logger.trace("Read $cnt new lines at line $line")
@@ -112,11 +153,8 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
         return when (tokens.first()) {
             is YamlToken.BulletPointToken -> parseList(nestedIndent)
             is YamlToken.WordToken ->
-                when (val res = parseBlock()) {
-                    is YamlParserResult.Success ->
-                        YamlParserResult.Success(
-                            YamlNode.Block(linkedMapOf(res.value.first to res.value.second)),
-                        )
+                when (val res = parseMappingAtIndent(nestedIndent, firstIndentAlreadyRead = true)) {
+                    is YamlParserResult.Success -> res
                     is YamlParserResult.Failure -> res
                 }
             else -> YamlParserResult.Failure("Expected `-` or key after indented block start at line $line")
@@ -149,7 +187,6 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
     private fun parseBlock(): YamlParserResult<Pair<String, YamlNode>> {
         logger.trace("Parsing block at line $line")
 
-        readNewLines()
         val baseIndent = readIndents()
         
         val key = when (val res = readWordOrFail()) {
@@ -172,8 +209,13 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
     fun parse(): YamlParserResult<YamlNode> {
         val nodes = linkedMapOf<String, YamlNode>()
         while (tokens.isNotEmpty()) {
+            readNewLines()
+            if (tokens.isEmpty()) break
+
             when (val res = parseBlock()) {
-                is YamlParserResult.Success -> nodes[res.value.first] = res.value.second
+                is YamlParserResult.Success -> {
+                    nodes[res.value.first] = res.value.second
+                }
                 is YamlParserResult.Failure -> return res
             }
         }

@@ -48,6 +48,6 @@ fun parseGitlabCi(filePath: String): YamlParserResult<GitlabCiConfig> {
         rootNode.traceTree("    ")
     }
 
-    return GitlabCiMapper().map(rootNode)
+    return GitlabCiMapper(rootNode).map()
 }
 
