@@ -30,9 +30,13 @@ class GitlabCiMapper(private val root: YamlNode) {
 
         val stages = mutableListOf<String>()
         for ((idx, item) in stagesNode.items.withIndex()) {
-            val w = item as? YamlNode.Word
-                ?: return YamlParserResult.Failure("`stages[$idx]`: list item must be must be a string")
-            stages.add(w.value)
+            val s = when (item) {
+                is YamlNode.Word -> item.value
+                is YamlNode.String -> item.value
+                else ->
+                    return YamlParserResult.Failure("`stages[$idx]`: list item must be a string")
+            }
+            stages.add(s)
         }
 
         return YamlParserResult.Success(stages)
@@ -68,12 +72,16 @@ class GitlabCiMapper(private val root: YamlNode) {
     private fun extractImage(jobName: String, imageNode: YamlNode): YamlParserResult<Image> {
         return when (imageNode) {
             is YamlNode.Word -> YamlParserResult.Success(Image.Name(imageNode.value))
+            is YamlNode.String -> YamlParserResult.Success(Image.Name(imageNode.value))
             is YamlNode.Block -> {
                 val nameNode = imageNode.entries["name"]
                     ?: return YamlParserResult.Failure("Job `$jobName`.image object is missing required `name`")
-                val nameWord = nameNode as? YamlNode.Word
-                    ?: return YamlParserResult.Failure("Job `$jobName`.image.name must be a string")
-                YamlParserResult.Success(Image.Object(name = nameWord.value))
+                val name = when (nameNode) {
+                    is YamlNode.Word -> nameNode.value
+                    is YamlNode.String -> nameNode.value
+                    else -> return YamlParserResult.Failure("Job `$jobName`.image.name must be a string or word")
+                }
+                YamlParserResult.Success(Image.Object(name))
             }
             else -> YamlParserResult.Failure("Job `$jobName`.image must be a string or an object with `name`")
         }

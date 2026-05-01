@@ -29,7 +29,7 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
                 }
             }
 
-            val key = when (val res = readWordOrFail()) {
+            val key = when (val res = readKeyOrFail()) {
                 is YamlParserResult.Success -> res.value
                 is YamlParserResult.Failure -> return res
             }
@@ -81,6 +81,16 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
         return cnt
     }
 
+    private fun readKeyOrFail(): YamlParserResult<String> {
+        if (tokens.isEmpty()) {
+            return YamlParserResult.Failure("Unexpected end of input at line $line")
+        }
+        if (tokens.first() is YamlToken.StringToken) {
+            return YamlParserResult.Failure("Quoted strings are not allowed as block keys at line $line")
+        }
+        return readWordOrFail()
+    }
+
     private fun readWordOrFail(): YamlParserResult<String> {
         if (tokens.isEmpty()) {
             return YamlParserResult.Failure("Unexpected end of input at line $line")
@@ -95,6 +105,38 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
         return YamlParserResult.Success(tok.content.toString())
     }
 
+    private fun readStringOrFail(): YamlParserResult<String> {
+        if (tokens.isEmpty()) {
+            return YamlParserResult.Failure("Unexpected end of input at line $line")
+        }
+
+        val tok = tokens.first()
+        if (tok !is YamlToken.StringToken) {
+            return YamlParserResult.Failure("Expected string, got $tok at line $line")
+        }
+        tokens.removeFirst()
+        logger.trace("Read string \"${tok.content}\" at line $line")
+        return YamlParserResult.Success(tok.content.toString())
+    }
+
+    private fun readValueOrFail(): YamlParserResult<YamlNode> {
+        if (tokens.isEmpty()) {
+            return YamlParserResult.Failure("Unexpected end of input at line $line")
+        }
+        return when (tokens.first()) {
+            is YamlToken.WordToken ->
+                when (val res = readWordOrFail()) {
+                    is YamlParserResult.Success -> YamlParserResult.Success(YamlNode.Word(res.value))
+                    is YamlParserResult.Failure -> res
+                }
+            is YamlToken.StringToken ->
+                when (val res = readStringOrFail()) {
+                    is YamlParserResult.Success -> YamlParserResult.Success(YamlNode.String(res.value))
+                    is YamlParserResult.Failure -> res
+                }
+            else -> YamlParserResult.Failure("Expected word or quoted string, got ${tokens.first()} at line $line")
+        }
+    }
 
     private fun readColonOrFail(): YamlParserResult<Unit> {
         if (tokens.isEmpty()) {
@@ -124,11 +166,11 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
 
             readIndents()
 
-            val wordTok = when (val res = readWordOrFail()) {
+            val item = when (val res = readValueOrFail()) {
                 is YamlParserResult.Success -> res.value
                 is YamlParserResult.Failure -> return res
             }
-            items.add(YamlNode.Word(wordTok))
+            items.add(item)
 
             readNewLines()
 
@@ -157,6 +199,8 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
                     is YamlParserResult.Success -> res
                     is YamlParserResult.Failure -> res
                 }
+            is YamlToken.StringToken ->
+                YamlParserResult.Failure("Quoted strings are not allowed as block keys at line $line")
             else -> YamlParserResult.Failure("Expected `-` or key after indented block start at line $line")
         }
     }
@@ -169,18 +213,18 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
             return YamlParserResult.Failure("Unexpected end of input at line $line")
         }
 
-        return when (val tok = tokens.first()) {
-            is YamlToken.WordToken -> {
-                when (val res = readWordOrFail()) {
-                    is YamlParserResult.Success -> YamlParserResult.Success(YamlNode.Word(res.value))
-                    is YamlParserResult.Failure -> return res
+        return when (tokens.first()) {
+            is YamlToken.WordToken,
+            is YamlToken.StringToken ->
+                when (val res = readValueOrFail()) {
+                    is YamlParserResult.Success -> YamlParserResult.Success(res.value)
+                    is YamlParserResult.Failure -> res
                 }
-            }
             is YamlToken.NewLineToken -> {
                 readNewLines()
                 parseNestedBlock(baseIndent)
             }
-            else -> YamlParserResult.Failure("Expected word or new line, got $tok at line $line")
+            else -> YamlParserResult.Failure("Expected word, quoted string, or new line, got ${tokens.first()} at line $line")
         }
     }
 
@@ -189,7 +233,7 @@ class YamlParser(private var tokens: LinkedList<YamlToken>) {
 
         val baseIndent = readIndents()
         
-        val key = when (val res = readWordOrFail()) {
+        val key = when (val res = readKeyOrFail()) {
             is YamlParserResult.Success -> res.value
             is YamlParserResult.Failure -> return res
         }

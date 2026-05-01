@@ -4,11 +4,15 @@ import org.slf4j.LoggerFactory
 
 sealed interface YamlNode {
     data class Word(
-        val value: String,
+        val value: kotlin.String,
+    ) : YamlNode
+
+    data class String(
+        val value: kotlin.String,
     ) : YamlNode
 
     data class Block(
-        val entries: Map<String, YamlNode>,
+        val entries: Map<kotlin.String, YamlNode>,
     ) : YamlNode
 
     data class List(
@@ -22,6 +26,8 @@ fun YamlNode.traceTree(indent: String = "") {
     when (this) {
         is YamlNode.Word ->
             logger.trace("$indent@Word \"$value\"")
+        is YamlNode.String ->
+            logger.trace("$indent@String \"$value\"")
         is YamlNode.Block -> {
             logger.trace("$indent@Block")
             for ((key, child) in entries) {

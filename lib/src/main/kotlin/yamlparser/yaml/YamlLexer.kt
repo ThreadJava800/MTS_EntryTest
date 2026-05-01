@@ -6,6 +6,7 @@ sealed interface YamlToken {
     data class WordToken(val content: CharSequence) : YamlToken
     data class IndentToken(val cnt: Int) : YamlToken
     data class NewLineToken(val cnt: Int) : YamlToken
+    data class StringToken(val content: CharSequence) : YamlToken
 
     data object ColonToken : YamlToken
     data object BulletPointToken : YamlToken
@@ -117,13 +118,42 @@ class YamlLexer(private val text: String) {
         return YamlParserResult.Success(null)
     }
 
-    private fun extractWordToken(): YamlParserResult<YamlToken?> {
+    private fun extractStringToken(): YamlParserResult<YamlToken?> {
+        if (currPos >= text.length) return YamlParserResult.Failure("Unterminated string at line $lineNumber")
+
+        var stringLength = 0
+        while (currPos < text.length) {
+            if (text[currPos] == '"') {
+                val string = text.subSequence(currPos - stringLength, currPos)
+                currPos += 1
+                return YamlParserResult.Success(YamlToken.StringToken(string))
+            }
+
+            stringLength++
+            currPos++
+        }
+
+        return YamlParserResult.Failure("Unterminated string at line $lineNumber")
+    }
+
+    private fun extractWordOrStringToken(): YamlParserResult<YamlToken?> {
+        if (currPos >= text.length) return YamlParserResult.Success(null)
+
+        if (text[currPos] == '"') {
+            currPos++
+            return extractStringToken()
+        }
+
         var wordLength = 0
         while (currPos + wordLength < text.length) {
             if (isTab(currPos + wordLength)) {
                 return YamlParserResult.Failure("Tabs are not allowed: found tab at line $lineNumber")
             }
-            if (!text[currPos + wordLength].isLetterOrDigit() && text[currPos + wordLength] != '_') {
+            if (
+                !text[currPos + wordLength].isLetterOrDigit() &&
+                 text[currPos + wordLength] != '_' &&
+                 text[currPos + wordLength] != '-'
+            ) {
                 break
             }
             wordLength++
@@ -163,7 +193,7 @@ class YamlLexer(private val text: String) {
                 continue
             }
 
-            val wordToken = when (val res = extractWordToken()) {
+            val wordToken = when (val res = extractWordOrStringToken()) {
                 is YamlParserResult.Success -> res.value
                 is YamlParserResult.Failure -> return res
             }
