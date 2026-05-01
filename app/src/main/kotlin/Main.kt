@@ -6,7 +6,7 @@ fun usage() {
 }
 
 fun main(args: Array<String>) {
-    System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "trace")
+    // System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "trace")
 
     if (args.size != 1) {
         usage()
