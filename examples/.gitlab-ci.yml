@@ -1,0 +1,39 @@
+# Комментарий
+    # Еще один комментарий
+
+stages:          # Обязательный список
+  - build_job
+  - unit_test-job
+  - lint_test_job
+   # Пустая строка с пробелами
+  
+
+  - deploy_job
+
+build_job:                     # Названия ключей должны быть словами
+  image: "какая-то информация" # Значения должны быть строками или словами  
+  script:
+    - echo
+    - "echo 'Hello, world!'"   # Строки должны быть в кавычках
+
+unit_test-job:
+  image: test    # Аттрибут image обязан присутствовать в блоках
+  script:        # image - либо строка, либо объект с полем name
+    - echo
+    - sleep
+    - echo
+
+lint_test_job:             # В качестве отступов разрешены лишь пробелы, не табуляции
+  image:
+    name: "test test"
+  script:
+    - echo
+    - sleep
+    - echo
+
+deploy_job:
+   image: deploy             # Чувствителен к отступам:
+   environment: production   # у блоков одного уровня должны быть одинаковые отступы
+   script:
+    - "echo test"
+    - echo

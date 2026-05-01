@@ -64,7 +64,10 @@ class GitlabCiMapper(private val root: YamlNode) {
             ?: return YamlParserResult.Failure("Job `$jobName` is missing required `image` attribute")
 
         return when (val res = extractImage(jobName, imageNode)) {
-            is YamlParserResult.Success -> YamlParserResult.Success(Job(res.value))
+            is YamlParserResult.Success -> {
+                val jobAttributes = jobBlock.entries.filterKeys { it != "image" }
+                YamlParserResult.Success(Job(res.value, jobAttributes))
+            }
             is YamlParserResult.Failure -> res
         }
     }
@@ -81,10 +84,10 @@ class GitlabCiMapper(private val root: YamlNode) {
                     is YamlNode.String -> nameNode.value
                     else -> return YamlParserResult.Failure("Job `$jobName`.image.name must be a string or word")
                 }
-                YamlParserResult.Success(Image.Object(name))
+                val imageAttributes = imageNode.entries.filterKeys { it != "name" }
+                YamlParserResult.Success(Image.Object(name, imageAttributes))
             }
             else -> YamlParserResult.Failure("Job `$jobName`.image must be a string or an object with `name`")
         }
     }
 }
-

@@ -2,7 +2,7 @@ import yamlparser.parseGitlabCi
 import yamlparser.yaml.YamlParserResult
 
 fun usage() {
-    println("Usage: ./gradlew run --args=\".gitlab-ci.yml\"")
+    println("Usage: ./gradlew run --args=\"examples/.gitlab-ci.yml\"")
 }
 
 fun main(args: Array<String>) {
